@@ -2,3 +2,4 @@
 src = "src/new"
 out = "out"
 libs = ["lib"]
+via_ir = true

@@ -22,7 +22,7 @@ pragma solidity 0.8.29;
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {IFlashLoanReceiver} from "./interfaces/IFlashLoanReceiver.sol";
 import {ILendingPool} from "./interfaces/ILendingPool.sol";
@@ -30,7 +30,7 @@ import {IUniswapV2Router02} from "./interfaces/IUniswapV2Router02.sol";
 import {ILendingPoolAddressesProvider} from "./interfaces/ILendingPoolAddressProvider.sol";
 import {IWETH} from "./interfaces/IWETH.sol";
 
-contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuard, Pausable, Ownable {
+contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, Pausable, Ownable {
     using SafeERC20 for IERC20;
 
     // --- Hardcoded common mainnet addresses (verify before use) ---
@@ -125,7 +125,7 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuard, Pausable, 
         address[] calldata assets,
         uint256[] calldata amounts,
         uint256[] calldata premiums,
-        address initiator,
+        address,
         bytes calldata params
     ) external override nonReentrant whenNotPaused returns (bool) {
         require(msg.sender == lendingPool, "only-lending-pool");
@@ -180,9 +180,9 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuard, Pausable, 
         // IERC20(intermediate).safeApprove(router2, out1);
         IERC20(intermediate).safeIncreaseAllowance(router2, out1);
 
-        uint256[] memory amounts2 =
-            IUniswapV2Router02(router2).swapExactTokensForTokens(out1, amountOutMin2, path2, address(this), deadline);
-        uint256 out2 = amounts2[amounts2.length - 1];
+        // uint256[] memory amounts2 =
+        IUniswapV2Router02(router2).swapExactTokensForTokens(out1, amountOutMin2, path2, address(this), deadline);
+        // uint256 out2 = amounts2[amounts2.length - 1];
 
         // reset approval
         IERC20(intermediate).forceApprove(router2, 0);
