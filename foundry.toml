@@ -1,4 +1,7 @@
 [profile.default]
-src = "src/new"
+src = "src"
+skip = ["src/legacy/*"]
 out = "out"
 libs = ["lib"]
+via_ir = true
+optimizer_runs = 999999

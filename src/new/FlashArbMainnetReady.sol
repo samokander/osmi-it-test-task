@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.6.6;
+pragma solidity 0.8.29;
 
 /**
  * It is recommended to provide 1–2 ETH or more when operating this contract on mainnet,
@@ -19,58 +19,18 @@ pragma solidity ^0.6.6;
  * Security mechanisms such as non-reentrancy guards, ownership access control, and minimum profitability
  * checks are integrated to ensure safe and controlled execution.
  */
-import "@openzeppelin-legacy/contracts/math/SafeMath.sol";
-import "@openzeppelin-legacy/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin-legacy/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin-legacy/contracts/access/Ownable.sol";
-import "@openzeppelin-legacy/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin-legacy/contracts/utils/Pausable.sol";
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {IFlashLoanReceiver} from "./interfaces/IFlashLoanReceiver.sol";
+import {ILendingPool} from "./interfaces/ILendingPool.sol";
+import {IUniswapV2Router02} from "./interfaces/IUniswapV2Router02.sol";
+import {ILendingPoolAddressesProvider} from "./interfaces/ILendingPoolAddressProvider.sol";
+import {IWETH} from "./interfaces/IWETH.sol";
 
-interface ILendingPoolAddressesProvider {
-    function getLendingPool() external view returns (address);
-}
-
-// Aave V2 lending pool minimal interface
-interface ILendingPool {
-    function flashLoan(
-        address receiverAddress,
-        address[] calldata assets,
-        uint256[] calldata amounts,
-        uint256[] calldata modes,
-        address onBehalfOf,
-        bytes calldata params,
-        uint16 referralCode
-    ) external;
-}
-
-// Aave V2 receiver interface
-interface IFlashLoanReceiver {
-    function executeOperation(
-        address[] calldata assets,
-        uint256[] calldata amounts,
-        uint256[] calldata premiums,
-        address initiator,
-        bytes calldata params
-    ) external returns (bool);
-}
-
-interface IUniswapV2Router02 {
-    function swapExactTokensForTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-}
-
-interface IWETH is IERC20 {
-    function deposit() external payable;
-    function withdraw(uint256 wad) external;
-}
-
-contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuard, Pausable, Ownable {
-    using SafeMath for uint256;
+contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, Pausable, Ownable {
     using SafeERC20 for IERC20;
 
     // --- Hardcoded common mainnet addresses (verify before use) ---
@@ -101,7 +61,7 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuard, Pausable, 
     event ProviderUpdated(address provider, address lendingPool);
     event Withdrawn(address token, address to, uint256 amount);
 
-    constructor() public {
+    constructor() Ownable(msg.sender) {
         provider = ILendingPoolAddressesProvider(AAVE_PROVIDER);
         lendingPool = provider.getLendingPool();
 
@@ -165,7 +125,7 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuard, Pausable, 
         address[] calldata assets,
         uint256[] calldata amounts,
         uint256[] calldata premiums,
-        address initiator,
+        address,
         bytes calldata params
     ) external override nonReentrant whenNotPaused returns (bool) {
         require(msg.sender == lendingPool, "only-lending-pool");
@@ -200,37 +160,40 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuard, Pausable, 
         }
 
         // Approve router1 to spend _reserve
-        IERC20(_reserve).safeApprove(router1, 0);
-        IERC20(_reserve).safeApprove(router1, _amount);
+        // IERC20(_reserve).safeApprove(router1, 0); // revert если initial approve == 0
+        // IERC20(_reserve).safeApprove(router1, _amount);
+        IERC20(_reserve).safeIncreaseAllowance(router1, _amount);
 
-        uint256 deadline = block.timestamp.add(300);
+        uint256 deadline = block.timestamp + 300;
         uint256[] memory amounts1 =
             IUniswapV2Router02(router1).swapExactTokensForTokens(_amount, amountOutMin1, path1, address(this), deadline);
         uint256 out1 = amounts1[amounts1.length - 1];
 
         // reset approval
-        IERC20(_reserve).safeApprove(router1, 0);
+        IERC20(_reserve).forceApprove(router1, 0);
 
         address intermediate = path1[path1.length - 1];
         // ensure path2 starts with intermediate
         require(path2[0] == intermediate, "path2 must start with intermediate token");
 
-        IERC20(intermediate).safeApprove(router2, 0);
-        IERC20(intermediate).safeApprove(router2, out1);
+        // IERC20(intermediate).safeApprove(router2, 0);
+        // IERC20(intermediate).safeApprove(router2, out1);
+        IERC20(intermediate).safeIncreaseAllowance(router2, out1);
 
-        uint256[] memory amounts2 =
-            IUniswapV2Router02(router2).swapExactTokensForTokens(out1, amountOutMin2, path2, address(this), deadline);
-        uint256 out2 = amounts2[amounts2.length - 1];
+        // uint256[] memory amounts2 =
+        IUniswapV2Router02(router2).swapExactTokensForTokens(out1, amountOutMin2, path2, address(this), deadline);
+        // uint256 out2 = amounts2[amounts2.length - 1];
 
-        IERC20(intermediate).safeApprove(router2, 0);
+        // reset approval
+        IERC20(intermediate).forceApprove(router2, 0);
 
-        uint256 totalDebt = _amount.add(_fee);
+        uint256 totalDebt = _amount + _fee;
         uint256 balance = IERC20(_reserve).balanceOf(address(this));
         require(balance >= totalDebt, "insufficient-to-repay");
 
         uint256 profit = 0;
         if (balance > totalDebt) {
-            profit = balance.sub(totalDebt);
+            profit = balance - totalDebt;
         }
 
         if (minProfit > 0) {
@@ -244,15 +207,16 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuard, Pausable, 
                 // Approve WETH withdraw: contract already holds the WETH
                 // Withdraw WETH to ETH
                 IWETH(WETH).withdraw(profit);
-                ethProfits = ethProfits.add(profit);
+                ethProfits = ethProfits + profit;
             } else {
-                profits[_reserve] = profits[_reserve].add(profit);
+                profits[_reserve] = profits[_reserve] + profit;
             }
         }
 
         // Approve lendingPool to pull repayment
-        IERC20(_reserve).safeApprove(lendingPool, 0);
-        IERC20(_reserve).safeApprove(lendingPool, totalDebt);
+        // IERC20(_reserve).safeApprove(lendingPool, 0);
+        // IERC20(_reserve).safeApprove(lendingPool, totalDebt);
+        IERC20(_reserve).safeIncreaseAllowance(lendingPool, totalDebt);
 
         emit FlashLoanExecuted(opInitiator, _reserve, _amount, _fee, profit);
         return true;
@@ -265,7 +229,7 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuard, Pausable, 
         if (token == address(0)) {
             // ETH withdraw
             require(amount <= ethProfits, "amount-exceeds-eth-profit");
-            ethProfits = ethProfits.sub(amount);
+            ethProfits = ethProfits - amount;
             (bool sent,) = to.call{value: amount}("");
             require(sent, "eth-transfer-failed");
             emit Withdrawn(address(0), to, amount);
@@ -273,7 +237,7 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuard, Pausable, 
         }
         uint256 bal = profits[token];
         require(amount <= bal, "amount-exceeds-profit");
-        profits[token] = bal.sub(amount);
+        profits[token] = bal - amount;
         IERC20(token).safeTransfer(to, amount);
         emit Withdrawn(token, to, amount);
     }
