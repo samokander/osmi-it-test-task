@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
+pragma solidity 0.8.29;
 
 /**
  * It is recommended to provide 1–2 ETH or more when operating this contract on mainnet,
@@ -19,18 +19,18 @@ pragma solidity 0.8.30;
  * Security mechanisms such as non-reentrancy guards, ownership access control, and minimum profitability
  * checks are integrated to ensure safe and controlled execution.
  */
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/utils/Pausable.sol";
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {IFlashLoanReceiver} from "./interfaces/IFlashLoanReceiver.sol";
 import {ILendingPool} from "./interfaces/ILendingPool.sol";
 import {IUniswapV2Router02} from "./interfaces/IUniswapV2Router02.sol";
+import {ILendingPoolAddressesProvider} from "./interfaces/ILendingPoolAddressProvider.sol";
 import {IWETH} from "./interfaces/IWETH.sol";
 
 contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuard, Pausable, Ownable {
-    using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
     // --- Hardcoded common mainnet addresses (verify before use) ---
@@ -61,7 +61,7 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuard, Pausable, 
     event ProviderUpdated(address provider, address lendingPool);
     event Withdrawn(address token, address to, uint256 amount);
 
-    constructor() public {
+    constructor() Ownable(msg.sender) {
         provider = ILendingPoolAddressesProvider(AAVE_PROVIDER);
         lendingPool = provider.getLendingPool();
 
@@ -160,8 +160,9 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuard, Pausable, 
         }
 
         // Approve router1 to spend _reserve
-        IERC20(_reserve).safeApprove(router1, 0);
-        IERC20(_reserve).safeApprove(router1, _amount);
+        // IERC20(_reserve).safeApprove(router1, 0); // revert если initial approve == 0
+        // IERC20(_reserve).safeApprove(router1, _amount);
+        IERC20(_reserve).safeIncreaseAllowance(router1, _amount);
 
         uint256 deadline = block.timestamp + 300;
         uint256[] memory amounts1 =
@@ -169,20 +170,22 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuard, Pausable, 
         uint256 out1 = amounts1[amounts1.length - 1];
 
         // reset approval
-        IERC20(_reserve).safeApprove(router1, 0);
+        IERC20(_reserve).forceApprove(router1, 0);
 
         address intermediate = path1[path1.length - 1];
         // ensure path2 starts with intermediate
         require(path2[0] == intermediate, "path2 must start with intermediate token");
 
-        IERC20(intermediate).safeApprove(router2, 0);
-        IERC20(intermediate).safeApprove(router2, out1);
+        // IERC20(intermediate).safeApprove(router2, 0);
+        // IERC20(intermediate).safeApprove(router2, out1);
+        IERC20(intermediate).safeIncreaseAllowance(router2, out1);
 
         uint256[] memory amounts2 =
             IUniswapV2Router02(router2).swapExactTokensForTokens(out1, amountOutMin2, path2, address(this), deadline);
         uint256 out2 = amounts2[amounts2.length - 1];
 
-        IERC20(intermediate).safeApprove(router2, 0);
+        // reset approval
+        IERC20(intermediate).forceApprove(router2, 0);
 
         uint256 totalDebt = _amount + _fee;
         uint256 balance = IERC20(_reserve).balanceOf(address(this));
@@ -211,8 +214,9 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuard, Pausable, 
         }
 
         // Approve lendingPool to pull repayment
-        IERC20(_reserve).safeApprove(lendingPool, 0);
-        IERC20(_reserve).safeApprove(lendingPool, totalDebt);
+        // IERC20(_reserve).safeApprove(lendingPool, 0);
+        // IERC20(_reserve).safeApprove(lendingPool, totalDebt);
+        IERC20(_reserve).safeIncreaseAllowance(lendingPool, totalDebt);
 
         emit FlashLoanExecuted(opInitiator, _reserve, _amount, _fee, profit);
         return true;
