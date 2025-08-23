@@ -19,12 +19,12 @@ pragma solidity ^0.6.6;
  * Security mechanisms such as non-reentrancy guards, ownership access control, and minimum profitability
  * checks are integrated to ensure safe and controlled execution.
  */
-import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin-legacy/contracts/math/SafeMath.sol";
+import "@openzeppelin-legacy/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin-legacy/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin-legacy/contracts/access/Ownable.sol";
+import "@openzeppelin-legacy/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin-legacy/contracts/utils/Pausable.sol";
 
 interface ILendingPoolAddressesProvider {
     function getLendingPool() external view returns (address);
