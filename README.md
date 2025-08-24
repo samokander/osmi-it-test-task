@@ -16,6 +16,41 @@ _Автор: samokander_
 
 6. Документация (NatSpec), читаемые имена, комментарии.
 
+## Установка
+
+1. Склонирйте репозиторий
+
+```bash
+git clone https://github.com/samokander/osmi-it-test-task.git
+cd osmi-it-test-task
+```
+
+2. Установите [Foundry](https://getfoundry.sh/)
+
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
+forge --version
+```
+
+3. Установите зависимости
+
+```bash
+forge install
+```
+
+4. Скомпилируйте контракт
+
+```bash
+forge compile
+```
+
+5. Сгенерируйте и запустите документацию
+
+```bash
+forge doc --serve --open
+```
+
 ## Лог
 
 Миграцию контракта будем производить на последнюю досутпную версию компилятора 0.8.29.
