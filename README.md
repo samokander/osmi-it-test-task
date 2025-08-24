@@ -1,66 +1,35 @@
-## Foundry
+# Тестовое задание osmi-it
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+_Автор: samokander_
 
-Foundry consists of:
+## Задание
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+1. Переписать с Solidity 0.6.6 → 0.8.20+.
 
-## Documentation
+2. Убрать SafeMath, обновить OpenZeppelin, адаптировать интерфейсы.
 
-https://book.getfoundry.sh/
+3. Сохранить всю логику (флешлон Aave, свопы DEX, whitelist, profit withdraw).
 
-## Usage
+4. Добавить: custom errors, access control, nonReentrant, Pausable, safe approve.
 
-### Build
+5. Оптимизация: immutable, constant, unchecked loops.
 
-```shell
-$ forge build
-```
+6. Документация (NatSpec), читаемые имена, комментарии.
 
-### Test
+## Лог
 
-```shell
-$ forge test
-```
+Миграцию контракта будем производить на последнюю досутпную версию компилятора 0.8.29.
 
-### Format
+Legacy контракт не компилируется из за ошибок Stack too deep. Эти ошибки в самом легаси контракте решено не исправлять, они пропадут при миграции. Соответственно компилятор настроен на рабочую директорию src/new, чтобы не ловить ошибки при компиляции обновленных контрактов.
 
-```shell
-$ forge fmt
-```
+Так как контракт должен работать с hardcoded адресами, интерфейсы оставляем в текущем виде. Отрефакторим для удобства.
 
-### Gas Snapshots
+Обновим OpenZeppelin до последней версии 5.4.0, уберем `SafeMath`, так как в версии Solidity 0.8+ есть встроенная защита от overflow.
 
-```shell
-$ forge snapshot
-```
+Воспользуемся новыми возможностями Solidity 0.8.24+ и последними обновлениями Ethereum, и `ReentrancyGuard` заменим на `ReentrancyGuardTransient`, что позволит сэкономить ~2000 газа за вызов.
 
-### Anvil
+Для корректной компиляции контракта уберем неиспользуемые переменные. Добавим оптимизатор с высокими значениями runs, так как контракт предполагается использовать часто.
 
-```shell
-$ anvil
-```
+После успешной компиляции контракта можно присутпать к оптимизациям: блоки unchecked, кастомные ошибки, убрать лишние проверки.
 
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+По заданию необходимо добавить custom errors, хотя для обратной совместимости с ABI legacy контракта я бы рекомендовал оставить require с revert string.
