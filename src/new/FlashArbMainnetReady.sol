@@ -61,6 +61,24 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
     event ProviderUpdated(address provider, address lendingPool);
     event Withdrawn(address token, address to, uint256 amount);
 
+    error ProviderZero();
+    error MaxSlippageExceeded(uint256 maxAllowed, uint256 actual);
+    error AmountZero();
+    error OnlyLendingPool(address sender, address pool);
+    error OnlySingleAssetSupported(uint256 assetsLength, uint256 amountsLength, uint256 premiumsLength);
+    error RouterNotAllowed(address router1, address router2);
+    error InvalidPathLength(uint256 path1Length, uint256 path2Length);
+    error InvalidPath1Start(address pathStart, address expected);
+    error InvalidPath2End(address pathEnd, address expected);
+    error TokenNotWhitelisted(address token);
+    error InvalidPath2Start(address pathStart, address expected);
+    error InsufficientToRepay(uint256 balance, uint256 totalDebt);
+    error LessThanMinProfit(uint256 profit, uint256 minProfit);
+    error ZeroAmountWithdraw();
+    error ZeroAddressWithdraw();
+    error InsufficientProfit(uint256 available, uint256 requested);
+    error WithdrawFailed(address to, uint256 amount);
+
     constructor() Ownable(msg.sender) {
         provider = ILendingPoolAddressesProvider(AAVE_PROVIDER);
         lendingPool = provider.getLendingPool();
@@ -92,14 +110,14 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
     }
 
     function updateProvider(address _provider) external onlyOwner {
-        require(_provider != address(0), "provider-zero");
+        if (_provider == address(0)) revert ProviderZero();
         provider = ILendingPoolAddressesProvider(_provider);
         lendingPool = provider.getLendingPool();
         emit ProviderUpdated(_provider, lendingPool);
     }
 
     function setMaxSlippage(uint256 bps) external onlyOwner {
-        require(bps <= 1000, "max 10% allowed");
+        if (bps > 1000) revert MaxSlippageExceeded(bps, 1000);
         maxSlippageBps = bps;
     }
 
@@ -108,7 +126,7 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
 
     // Start a single-asset flash loan via Aave V2 (assets/amounts arrays length == 1)
     function startFlashLoan(address asset, uint256 amount, bytes calldata params) external onlyOwner whenNotPaused {
-        require(amount > 0, "amount-zero");
+        if (amount == 0) revert AmountZero();
         address[] memory assets = new address[](1);
         assets[0] = asset;
         uint256[] memory amounts = new uint256[](1);
@@ -128,8 +146,10 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
         address,
         bytes calldata params
     ) external override nonReentrant whenNotPaused returns (bool) {
-        require(msg.sender == lendingPool, "only-lending-pool");
-        require(assets.length == 1 && amounts.length == 1 && premiums.length == 1, "only-single-asset-supported");
+        if (msg.sender != lendingPool) revert OnlyLendingPool(msg.sender, lendingPool);
+        if (assets.length != 1 || amounts.length != 1 || premiums.length != 1) {
+            revert OnlySingleAssetSupported(assets.length, amounts.length, premiums.length);
+        }
 
         address _reserve = assets[0];
         uint256 _amount = amounts[0];
@@ -147,16 +167,16 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
             address opInitiator
         ) = abi.decode(params, (address, address, address[], address[], uint256, uint256, uint256, bool, address));
 
-        require(routerWhitelist[router1] && routerWhitelist[router2], "router-not-allowed");
-        require(path1.length >= 2 && path2.length >= 2, "invalid-paths");
-        require(path1[0] == _reserve, "path1 must start with reserve");
-        require(path2[path2.length - 1] == _reserve, "path2 must end with reserve");
+        if (!routerWhitelist[router1] || !routerWhitelist[router2]) revert RouterNotAllowed(router1, router2);
+        if (path1.length < 2 || path2.length < 2) revert InvalidPathLength(path1.length, path2.length);
+        if (path1[0] != _reserve) revert InvalidPath1Start(path1[0], _reserve);
+        if (path2[path2.length - 1] != _reserve) revert InvalidPath2End(path2[path2.length - 1], _reserve);
 
         for (uint256 i = 0; i < path1.length; i++) {
-            require(tokenWhitelist[path1[i]], "token1-not-whitelisted");
+            if (!tokenWhitelist[path1[i]]) revert TokenNotWhitelisted(path1[i]);
         }
         for (uint256 i = 0; i < path2.length; i++) {
-            require(tokenWhitelist[path2[i]], "token2-not-whitelisted");
+            if (!tokenWhitelist[path2[i]]) revert TokenNotWhitelisted(path2[i]);
         }
 
         // Approve router1 to spend _reserve
@@ -173,7 +193,7 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
 
         address intermediate = path1[path1.length - 1];
         // ensure path2 starts with intermediate
-        require(path2[0] == intermediate, "path2 must start with intermediate token");
+        if (path2[0] != intermediate) revert InvalidPath2Start(path2[0], intermediate);
 
         IERC20(intermediate).forceApprove(router2, 0);
         IERC20(intermediate).forceApprove(router2, out1);
@@ -187,7 +207,8 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
 
         uint256 totalDebt = _amount + _fee;
         uint256 balance = IERC20(_reserve).balanceOf(address(this));
-        require(balance >= totalDebt, "insufficient-to-repay");
+
+        if (balance < totalDebt) revert InsufficientToRepay(balance, totalDebt);
 
         uint256 profit = 0;
         if (balance > totalDebt) {
@@ -197,7 +218,7 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
         }
 
         if (minProfit > 0) {
-            require(profit >= minProfit, "profit-less-than-min");
+            if (profit < minProfit) revert LessThanMinProfit(profit, minProfit);
         }
 
         if (profit > 0) {
@@ -224,21 +245,21 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
 
     // Withdraw accumulated profit (pull pattern). If token == address(0) withdraw ETH profits.
     function withdrawProfit(address token, uint256 amount, address to) external onlyOwner nonReentrant {
-        require(amount > 0, "amount-zero");
-        require(to != address(0), "to-zero");
+        if (amount == 0) revert ZeroAmountWithdraw();
+        if (to == address(0)) revert ZeroAddressWithdraw();
         if (token == address(0)) {
             // ETH withdraw
-            require(amount <= ethProfits, "amount-exceeds-eth-profit");
+            if (amount > ethProfits) revert InsufficientProfit(ethProfits, amount);
             unchecked {
                 ethProfits = ethProfits - amount;
             }
             (bool sent,) = to.call{value: amount}("");
-            require(sent, "eth-transfer-failed");
+            if (!sent) revert WithdrawFailed(to, amount);
             emit Withdrawn(address(0), to, amount);
             return;
         }
         uint256 bal = profits[token];
-        require(amount <= bal, "amount-exceeds-profit");
+        if (amount > bal) revert InsufficientProfit(bal, amount);
         unchecked {
             profits[token] = bal - amount;
         }
@@ -248,7 +269,7 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
 
     // Emergency rescue for ERC20
     function emergencyWithdrawERC20(address token, uint256 amount, address to) external onlyOwner nonReentrant {
-        require(to != address(0), "to-zero");
+        if (to == address(0)) revert ZeroAddressWithdraw();
         IERC20(token).safeTransfer(to, amount);
         emit Withdrawn(token, to, amount);
     }
