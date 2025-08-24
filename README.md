@@ -51,6 +51,19 @@ forge compile
 forge doc --serve --open
 ```
 
+6. Создайте .env файл
+
+```bash
+cp .env.example .env
+```
+
+7. Запустите скрипты развертывания
+
+```bash
+source .env
+forge script script/FlashArbMainnetReady.sol:Deploy --fork-url "$MAINNET_RPC_URL"
+```
+
 ## Структура
 
 - `src/`: Исходный код смарт-контрактов.
