@@ -61,7 +61,7 @@ cp .env.example .env
 
 ```bash
 source .env
-forge script script/FlashArbMainnetReady.sol:Deploy --fork-url "$MAINNET_RPC_URL"
+forge script script/FlashArbMainnetReady.sol --fork-url "$MAINNET_RPC_URL"
 ```
 
 ## Структура
