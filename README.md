@@ -16,6 +16,63 @@ _Автор: samokander_
 
 6. Документация (NatSpec), читаемые имена, комментарии.
 
+## Установка
+
+1. Склонирйте репозиторий
+
+```bash
+git clone https://github.com/samokander/osmi-it-test-task.git
+cd osmi-it-test-task
+```
+
+2. Установите [Foundry](https://getfoundry.sh/)
+
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
+forge --version
+```
+
+3. Установите зависимости
+
+```bash
+forge install
+```
+
+4. Скомпилируйте контракт
+
+```bash
+forge compile
+```
+
+5. Сгенерируйте и запустите документацию
+
+```bash
+forge doc --serve --open
+```
+
+6. Создайте .env файл
+
+```bash
+cp .env.example .env
+```
+
+7. Запустите скрипты развертывания
+
+```bash
+source .env
+forge script script/FlashArbMainnetReady.sol --fork-url "$MAINNET_RPC_URL"
+```
+
+## Структура
+
+- `src/`: Исходный код смарт-контрактов.
+  - `new/`: Обновленный контракт на версии 0.8.29.
+  - `legacy/`: Исходный legacy контракт.
+- `script/`: Скрипты для развертывания и взаимодействия с контрактами.
+- `README.md`: Документация проекта.
+- `.env`: Файл окружения с переменными
+
 ## Лог
 
 Миграцию контракта будем производить на последнюю досутпную версию компилятора 0.8.29.

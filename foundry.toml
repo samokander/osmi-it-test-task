@@ -5,3 +5,4 @@ out = "out"
 libs = ["lib"]
 via_ir = true
 optimizer_runs = 999999
+ignored_error_codes = [5667, 2394]

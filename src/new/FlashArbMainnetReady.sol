@@ -210,6 +210,7 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
     /// @param assets The array with a single borrowed asset address.
     /// @param amounts The array with a single borrowed amount.
     /// @param premiums The array with a single fee amount.
+    /// @param initiator The initiator of the flash loan. Unused
     /// @param params ABI‑encoded tuple `(router1, router2, path1, path2, amountOutMin1, amountOutMin2, minProfit, unwrapProfitToEth, opInitiator)`.
     /// @return success True if the operation completed and approval for repayment was set (required by Aave LendingPool).
     /// @custom:error {OnlyLendingPool} If called by anyone except the configured LendingPool.
@@ -227,7 +228,7 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
         address[] calldata assets,
         uint256[] calldata amounts,
         uint256[] calldata premiums,
-        address,
+        address initiator,
         bytes calldata params
     ) external override nonReentrant whenNotPaused returns (bool) {
         if (msg.sender != lendingPool) revert OnlyLendingPool(msg.sender, lendingPool);
