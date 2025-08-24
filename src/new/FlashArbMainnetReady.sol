@@ -235,9 +235,8 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
         }
 
         // Approve lendingPool to pull repayment
-        // IERC20(_reserve).safeApprove(lendingPool, 0);
-        // IERC20(_reserve).safeApprove(lendingPool, totalDebt);
-        IERC20(_reserve).safeIncreaseAllowance(lendingPool, totalDebt);
+        IERC20(_reserve).forceApprove(lendingPool, 0);
+        IERC20(_reserve).forceApprove(lendingPool, totalDebt);
 
         emit FlashLoanExecuted(opInitiator, _reserve, _amount, _fee, profit);
         return true;
