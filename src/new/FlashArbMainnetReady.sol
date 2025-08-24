@@ -160,11 +160,10 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
         }
 
         // Approve router1 to spend _reserve
-        // IERC20(_reserve).safeApprove(router1, 0); // revert если initial approve == 0
-        // IERC20(_reserve).safeApprove(router1, _amount);
-        IERC20(_reserve).safeIncreaseAllowance(router1, _amount);
+        IERC20(_reserve).forceApprove(router1, 0);
+        IERC20(_reserve).forceApprove(router1, _amount);
 
-        uint256 deadline = block.timestamp + 300;
+        uint256 deadline = block.timestamp + 300; // could be unckecked
         uint256[] memory amounts1 =
             IUniswapV2Router02(router1).swapExactTokensForTokens(_amount, amountOutMin1, path1, address(this), deadline);
         uint256 out1 = amounts1[amounts1.length - 1];
@@ -176,9 +175,8 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
         // ensure path2 starts with intermediate
         require(path2[0] == intermediate, "path2 must start with intermediate token");
 
-        // IERC20(intermediate).safeApprove(router2, 0);
-        // IERC20(intermediate).safeApprove(router2, out1);
-        IERC20(intermediate).safeIncreaseAllowance(router2, out1);
+        IERC20(intermediate).forceApprove(router2, 0);
+        IERC20(intermediate).forceApprove(router2, out1);
 
         // uint256[] memory amounts2 =
         IUniswapV2Router02(router2).swapExactTokensForTokens(out1, amountOutMin2, path2, address(this), deadline);
@@ -193,7 +191,9 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
 
         uint256 profit = 0;
         if (balance > totalDebt) {
-            profit = balance - totalDebt;
+            unchecked {
+                profit = balance - totalDebt;
+            }
         }
 
         if (minProfit > 0) {
@@ -229,7 +229,9 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
         if (token == address(0)) {
             // ETH withdraw
             require(amount <= ethProfits, "amount-exceeds-eth-profit");
-            ethProfits = ethProfits - amount;
+            unchecked {
+                ethProfits = ethProfits - amount;
+            }
             (bool sent,) = to.call{value: amount}("");
             require(sent, "eth-transfer-failed");
             emit Withdrawn(address(0), to, amount);
@@ -237,7 +239,9 @@ contract FlashArbMainnetReady is IFlashLoanReceiver, ReentrancyGuardTransient, P
         }
         uint256 bal = profits[token];
         require(amount <= bal, "amount-exceeds-profit");
-        profits[token] = bal - amount;
+        unchecked {
+            profits[token] = bal - amount;
+        }
         IERC20(token).safeTransfer(to, amount);
         emit Withdrawn(token, to, amount);
     }
